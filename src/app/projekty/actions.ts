@@ -67,9 +67,9 @@ async function saveProject(formData: FormData, id: number | null): Promise<Actio
 
   try {
     if (id === null) {
-      db.insert(projects).values(values).run();
+      await db.insert(projects).values(values);
     } else {
-      db.update(projects).set(values).where(eq(projects.id, id)).run();
+      await db.update(projects).set(values).where(eq(projects.id, id));
     }
   } catch (error) {
     console.error('saveProject', error);
@@ -104,7 +104,7 @@ export async function deleteProject(formData: FormData): Promise<void> {
   if (!id.success) return;
 
   // Zadania lecą kaskadą (FK ON DELETE CASCADE).
-  db.delete(projects).where(eq(projects.id, id.data)).run();
+  await db.delete(projects).where(eq(projects.id, id.data));
   revalidatePath(PATH);
 }
 
@@ -117,7 +117,7 @@ export async function addProjectTask(formData: FormData): Promise<void> {
   const parsed = taskSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
 
-  db.insert(projectTasks).values(parsed.data).run();
+  await db.insert(projectTasks).values(parsed.data);
   revalidatePath(PATH);
 }
 
@@ -125,10 +125,9 @@ export async function toggleProjectTask(formData: FormData): Promise<void> {
   const id = idField.safeParse(formData.get('id'));
   if (!id.success) return;
 
-  db.update(projectTasks)
+  await db.update(projectTasks)
     .set({ done: not(projectTasks.done) })
-    .where(eq(projectTasks.id, id.data))
-    .run();
+    .where(eq(projectTasks.id, id.data));
   revalidatePath(PATH);
 }
 
@@ -136,6 +135,6 @@ export async function deleteProjectTask(formData: FormData): Promise<void> {
   const id = idField.safeParse(formData.get('id'));
   if (!id.success) return;
 
-  db.delete(projectTasks).where(eq(projectTasks.id, id.data)).run();
+  await db.delete(projectTasks).where(eq(projectTasks.id, id.data));
   revalidatePath(PATH);
 }

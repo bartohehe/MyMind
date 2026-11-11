@@ -27,13 +27,12 @@ export function normalizeSlots(times: readonly string[]): MedSlot[] {
 export async function getMedications(): Promise<MedicationToday[]> {
   const date = today();
 
-  const meds = db
+  const meds = await db
     .select()
     .from(medications)
-    .orderBy(desc(medications.active), asc(medications.name))
-    .all();
+    .orderBy(desc(medications.active), asc(medications.name));
 
-  const logs = db.select().from(medicationLogs).where(eq(medicationLogs.date, date)).all();
+  const logs = await db.select().from(medicationLogs).where(eq(medicationLogs.date, date));
   const byKey = new Map(logs.map((log) => [`${log.medicationId}:${log.slot}`, log]));
 
   return meds.map((medication) => ({
@@ -75,16 +74,15 @@ export async function getWeekHistory(): Promise<WeekHistory> {
     return { date, isToday: date === todayStr };
   });
 
-  const active = db
+  const active = await db
     .select()
     .from(medications)
     .where(eq(medications.active, true))
-    .orderBy(asc(medications.name))
-    .all();
+    .orderBy(asc(medications.name));
 
   if (active.length === 0) return { days, rows: [] };
 
-  const logs = db
+  const logs = await db
     .select()
     .from(medicationLogs)
     .where(
@@ -93,8 +91,7 @@ export async function getWeekHistory(): Promise<WeekHistory> {
         lte(medicationLogs.date, addDays(monday, 6)),
         eq(medicationLogs.taken, true),
       ),
-    )
-    .all();
+    );
 
   const takenCount = new Map<string, number>();
   for (const log of logs) {

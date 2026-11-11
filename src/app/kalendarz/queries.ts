@@ -72,8 +72,7 @@ export async function getEventsBetween(from: string, to: string): Promise<Calend
     .select()
     .from(events)
     .where(and(gte(events.date, from), lte(events.date, to)))
-    .orderBy(asc(events.date), asc(events.time), asc(events.id))
-    .all();
+    .orderBy(asc(events.date), asc(events.time), asc(events.id));
 }
 
 export async function getEventsOn(date: string): Promise<CalendarEvent[]> {
@@ -81,8 +80,7 @@ export async function getEventsOn(date: string): Promise<CalendarEvent[]> {
     .select()
     .from(events)
     .where(eq(events.date, date))
-    .orderBy(asc(events.time), asc(events.id))
-    .all();
+    .orderBy(asc(events.time), asc(events.id));
 }
 
 export async function getUpcomingEvents(from: string, limit = 6): Promise<CalendarEvent[]> {
@@ -91,6 +89,5 @@ export async function getUpcomingEvents(from: string, limit = 6): Promise<Calend
     .from(events)
     .where(gte(events.date, from))
     .orderBy(asc(events.date), asc(events.time), asc(events.id))
-    .limit(limit)
-    .all();
+    .limit(limit);
 }

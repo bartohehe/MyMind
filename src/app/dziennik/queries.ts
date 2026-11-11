@@ -10,15 +10,14 @@ export async function getJournalEntries(): Promise<JournalEntry[]> {
   return db
     .select()
     .from(journalEntries)
-    .orderBy(desc(journalEntries.date), desc(journalEntries.id))
-    .all();
+    .orderBy(desc(journalEntries.date), desc(journalEntries.id));
 }
 
 export async function getLatestJournalEntry(): Promise<JournalEntry | undefined> {
-  return db
+  const [row] = await db
     .select()
     .from(journalEntries)
     .orderBy(desc(journalEntries.date), desc(journalEntries.id))
-    .limit(1)
-    .get();
+    .limit(1);
+  return row;
 }

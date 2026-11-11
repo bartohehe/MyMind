@@ -10,9 +10,9 @@ v1 zakłada, że dostęp do sieci domowej to wystarczająca granica.
 | ---------- | ---------------------------------------------------------- |
 | Framework  | Next.js 15 (App Router), TypeScript strict                  |
 | Mutacje    | Server Actions (bez osobnej warstwy API)                    |
-| Baza       | SQLite przez Drizzle ORM + better-sqlite3                   |
-| Migracje   | drizzle-kit, aplikowane automatycznie przy pierwszym zapytaniu |
-| Plik bazy  | `./data/app.db` (na wolumenie Dockera)                      |
+| Baza       | PostgreSQL 17 przez Drizzle ORM + `pg` (node-postgres)       |
+| Migracje   | drizzle-kit, aplikowane automatycznie przy starcie serwera   |
+| Dane       | nazwany wolumen Dockera `mymind-pgdata`                      |
 | Walidacja  | zod                                                        |
 | Języki     | polski i angielski (przełącznik PL/EN w topbarze)           |
 | Deployment | Docker multi-stage, ARM64, `output: 'standalone'`           |
@@ -34,7 +34,8 @@ v1 zakłada, że dostęp do sieci domowej to wystarczająca granica.
 ### Leki: reset o północy bez crona
 
 Stan checkboxa to „czy w `medication_logs` jest wiersz `(lek, dzisiejsza data, pora)`
-z `taken = true`". Kliknięcie robi upsert tego wiersza. Nowy dzień = brak wiersza =
+z `taken = true`". Kliknięcie robi jeden atomowy upsert tego wiersza
+(`ON CONFLICT … DO UPDATE SET taken = NOT taken`), więc szybki podwójny klik nie rozjedzie stanu. Nowy dzień = brak wiersza =
 odznaczone — nic nie trzeba resetować, a historia zostaje w bazie i zasila siatkę tygodnia
 (pełne kółko = wszystkie pory, obwódka = część, szare = nic).
 
@@ -48,16 +49,25 @@ wiersze do `activity_days` i `workouts`.
 
 ## Uruchomienie w trybie deweloperskim
 
+Aplikacja chodzi na hoście, a Postgres w Dockerze (ten sam z `docker-compose.yml`,
+wystawiony tylko na `127.0.0.1:5432`):
+
 ```bash
 npm install
+```
+
+```bash
+docker compose up -d db
 ```
 
 ```bash
 npm run dev
 ```
 
-Aplikacja stoi na http://localhost:3000. Baza `./data/app.db` tworzy się i migruje sama
-przy pierwszym zapytaniu — nie trzeba nic odpalać ręcznie.
+Aplikacja stoi na http://localhost:3000. Przy starcie serwer sam stosuje migracje —
+nie trzeba nic odpalać ręcznie. Bez pliku `.env` aplikacja łączy się z
+`postgres://mymind:mymind@localhost:5432/mymind`; własne hasło ustawiasz w `.env`
+(wzór w [`.env.example`](.env.example)) — czytają go i Next, i docker compose, i skrypty `db:*`.
 
 | Skrypt                | Co robi                                                      |
 | --------------------- | ------------------------------------------------------------ |
@@ -78,9 +88,21 @@ więc ten sam `Dockerfile` działa i na Pi, i na amd64:
 docker compose up -d --build
 ```
 
-Aplikacja słucha na porcie 3000, restartuje się z `unless-stopped`, a baza leży
-w `./data` na hoście, więc **przetrwa przebudowę obrazu**. Build potrzebuje internetu
-(npm i fonty z Google Fonts, które `next/font` wkleja do obrazu) — działająca aplikacja już nie.
+Wstają dwa kontenery: `mymind` (port 3000) i `mymind-db` (Postgres 17, oficjalny
+obraz multi-arch). Aplikacja czeka, aż baza przejdzie healthcheck, a przy starcie
+sama stosuje migracje. Oba restartują się z `unless-stopped`.
+
+Dane leżą w nazwanym wolumenie `mymind-pgdata`, więc **przetrwają przebudowę obrazów
+i `docker compose down`**. Znikają dopiero przy `docker compose down -v` — tej flagi
+nie używaj na Pi, chyba że naprawdę chcesz zacząć od zera.
+
+Postgres nie jest wystawiony na sieć domową — port 5432 słucha tylko na `127.0.0.1`
+hosta. Przed pierwszym startem na Pi skopiuj `.env.example` do `.env` i ustaw własne
+hasło: Postgres czyta je tylko przy inicjalizacji pustego wolumenu.
+
+Build potrzebuje internetu (npm i fonty z Google Fonts, które `next/font` wkleja do obrazu)
+— działająca aplikacja już nie. Zależności są czystym JS-em, więc obraz nie potrzebuje
+kompilatora i buduje się na Pi szybko.
 
 ```bash
 docker compose logs -f
@@ -104,14 +126,17 @@ więc od `TZ` zależy, o której godzinie przeskakuje nowy dzień.
 
 ### Kopia zapasowa
 
-Cała baza to jeden plik, ale przy działającym kontenerze SQLite pracuje w trybie WAL —
-zwykłe `cp data/app.db` potrafi zgubić ostatnie zapisy. Zrób spójną kopię przez `VACUUM INTO`:
+`pg_dump` robi spójną kopię działającej bazy — nie trzeba niczego zatrzymywać:
 
 ```bash
-docker compose exec mymind node -e "require('better-sqlite3')('/app/data/app.db').exec(\"VACUUM INTO '/app/data/backup.db'\")"
+docker compose exec -T db pg_dump -U mymind -d mymind --format=custom > mymind-backup.dump
 ```
 
-Kopia ląduje w `./data/backup.db` na hoście. Nie trzeba zatrzymywać aplikacji.
+Odtworzenie (nadpisuje obecne dane):
+
+```bash
+docker compose exec -T db pg_restore -U mymind -d mymind --clean --if-exists < mymind-backup.dump
+```
 
 ## Migracje
 
@@ -121,16 +146,19 @@ Schemat bazy siedzi w jednym pliku: [`src/db/schema.ts`](src/db/schema.ts).
 2. `npm run db:generate` — drizzle-kit wypluwa nowy plik SQL do `./drizzle`.
 3. Restart aplikacji (`npm run dev` albo `docker compose up -d --build`).
 
-Krok 3 wystarczy, bo [`src/db/index.ts`](src/db/index.ts) woła `migrate()` przy pierwszym
-zapytaniu — świeży wolumen po `docker compose up` sam się zmigruje, a istniejąca baza
-dostanie tylko brakujące migracje. `npm run db:migrate` jest awaryjnym wytrychem.
+Krok 3 wystarczy, bo [`src/instrumentation.ts`](src/instrumentation.ts) — hak startowy
+Next.js — stosuje brakujące migracje raz przy uruchomieniu serwera, a Next czeka z obsługą
+żądań, aż skończy. Świeży wolumen sam dostaje schemat, istniejąca baza tylko nowe migracje.
+`npm run db:migrate` robi to samo bez startu Next.js.
+
+Szczegóły w [`src/db/run-migrations.ts`](src/db/run-migrations.ts):
+
+- **ponawianie połączenia** — w Dockerze Postgres może jeszcze startować (do 30 prób co 2 s);
+- **`pg_advisory_lock`** — dwa procesy nie zmigrują bazy jednocześnie;
+- **build bez bazy** — `next build` nie wywołuje instrumentation, a pula `pg` otwiera
+  połączenie dopiero przy pierwszym zapytaniu, więc obraz buduje się bez działającego Postgresa.
 
 Pliki migracji z `./drizzle` **muszą trafić do repo i do obrazu** (`Dockerfile` je kopiuje).
-
-**Dlaczego połączenie jest leniwe.** `db` to Proxy — plik otwiera się dopiero przy pierwszym
-wywołaniu metody, nie przy imporcie modułu. `next build` importuje strony w kilku procesach
-równolegle; gdyby każdy migrował przy imporcie, ścigałyby się o ten sam plik
-(„table already exists"). Strony są dynamiczne, więc build bazy w ogóle nie dotyka.
 
 ## Architektura
 
@@ -151,7 +179,10 @@ src/
   config/tabs.ts        lista zakładek — jedyne źródło nawigacji
   db/
     schema.ts           WSZYSTKIE tabele
-    index.ts            leniwe połączenie + automatyczne migracje
+    index.ts            pula połączeń `pg` + instancja Drizzle
+    config.ts           DATABASE_URL i domyślny adres lokalny
+    run-migrations.ts   migracje z ponawianiem i blokadą
+  instrumentation.ts    hak startowy Next.js — odpala migracje
   i18n/
     dictionaries.ts     słowniki PL i EN (PL wyznacza typ — brak tłumaczenia = błąd kompilacji)
     server.ts           getI18n() dla Server Components i akcji (czyta ciasteczko)
@@ -209,8 +240,8 @@ Powiedzmy, że chcesz zakładkę **Książki**.
 **1. Dopisz tabelę** w `src/db/schema.ts`:
 
 ```ts
-export const books = sqliteTable('books', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
+export const books = pgTable('books', {
+  id: id(),
   title: text('title').notNull(),
   author: text('author').notNull().default(''),
   createdAt: createdAt(),
@@ -220,7 +251,7 @@ export const books = sqliteTable('books', {
 export type Book = typeof books.$inferSelect;
 ```
 
-Helpery `createdAt()` / `updatedAt()` są na górze pliku — `updatedAt()` sam bumpuje
+Helpery `id()`, `day()`, `createdAt()` / `updatedAt()` są na górze pliku — `updatedAt()` sam bumpuje
 znacznik przy `db.update()`.
 
 **2. Wygeneruj migrację:**

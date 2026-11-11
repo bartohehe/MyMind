@@ -2,8 +2,13 @@ node_modules
 .next
 .git
 .gitignore
-data
+.claude
 README.md
 *.tsbuildinfo
 Dockerfile
 docker-compose.yml
+
+# Hasło do bazy nie ma czego szukać w kontekście buildu
+.env
+.env.*
+!.env.example

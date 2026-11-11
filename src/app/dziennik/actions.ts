@@ -38,7 +38,7 @@ export async function createJournalEntry(
   if (!parsed.success) return parsed.state;
 
   try {
-    db.insert(journalEntries).values(parsed.data).run();
+    await db.insert(journalEntries).values(parsed.data);
   } catch (error) {
     console.error('createJournalEntry', error);
     return fail(t.errors.saveFailed, undefined, formValues(formData));
@@ -59,7 +59,7 @@ export async function updateJournalEntry(
   const { id, ...values } = parsed.data;
 
   try {
-    db.update(journalEntries).set(values).where(eq(journalEntries.id, id)).run();
+    await db.update(journalEntries).set(values).where(eq(journalEntries.id, id));
   } catch (error) {
     console.error('updateJournalEntry', error);
     return fail(t.errors.saveFailed, undefined, formValues(formData));
@@ -73,6 +73,6 @@ export async function deleteJournalEntry(formData: FormData): Promise<void> {
   const id = idField.safeParse(formData.get('id'));
   if (!id.success) return;
 
-  db.delete(journalEntries).where(eq(journalEntries.id, id.data)).run();
+  await db.delete(journalEntries).where(eq(journalEntries.id, id.data));
   revalidate();
 }

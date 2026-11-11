@@ -23,7 +23,7 @@ function compare(a: Todo, b: Todo): number {
 }
 
 export async function getTodos(filter: TodoFilter): Promise<{ items: Todo[]; total: number; left: number }> {
-  const all = db.select().from(todos).all();
+  const all = await db.select().from(todos);
   const items = all
     .filter((todo) => (filter === 'all' ? true : filter === 'done' ? todo.done : !todo.done))
     .sort(compare);

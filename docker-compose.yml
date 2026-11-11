@@ -8,11 +8,39 @@ services:
     restart: unless-stopped
     ports:
       - '3000:3000'
-    volumes:
-      # Baza SQLite żyje na hoście — przetrwa przebudowę obrazu.
-      - ./data:/app/data
     environment:
       # Strefa czasowa decyduje, kiedy „dzisiaj" przeskakuje na nowy dzień
       # (od tego zależy automatyczny reset checkboxów w zakładce Leki).
       TZ: Europe/Warsaw
-      DATABASE_PATH: /app/data/app.db
+      DATABASE_URL: postgres://${POSTGRES_USER:-mymind}:${POSTGRES_PASSWORD:-mymind}@db:5432/${POSTGRES_DB:-mymind}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    # Oficjalny obraz jest multi-arch — działa natywnie na ARM64 (Raspberry Pi 5).
+    image: postgres:17-bookworm
+    container_name: mymind-db
+    restart: unless-stopped
+    environment:
+      TZ: Europe/Warsaw
+      POSTGRES_USER: ${POSTGRES_USER:-mymind}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mymind}
+      POSTGRES_DB: ${POSTGRES_DB:-mymind}
+    volumes:
+      # Nazwany wolumen — przetrwa przebudowę obrazów i `docker compose down`
+      # (ginie dopiero przy `docker compose down -v`).
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      # Tylko localhost hosta: `npm run dev` na tej maszynie widzi bazę,
+      # a reszta sieci domowej — nie.
+      - '127.0.0.1:5432:5432'
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+volumes:
+  pgdata:
+    name: mymind-pgdata

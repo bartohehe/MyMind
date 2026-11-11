@@ -34,7 +34,7 @@ export async function createNote(
   if (!parsed.success) return parsed.state;
 
   try {
-    db.insert(notes).values(parsed.data).run();
+    await db.insert(notes).values(parsed.data);
   } catch (error) {
     console.error('createNote', error);
     return fail(t.errors.saveFailed, undefined, formValues(formData));
@@ -55,7 +55,7 @@ export async function updateNote(
   const { id, ...values } = parsed.data;
 
   try {
-    db.update(notes).set(values).where(eq(notes.id, id)).run();
+    await db.update(notes).set(values).where(eq(notes.id, id));
   } catch (error) {
     console.error('updateNote', error);
     return fail(t.errors.saveFailed, undefined, formValues(formData));
@@ -71,10 +71,9 @@ export async function togglePin(formData: FormData): Promise<void> {
 
   // Przypięcie nie jest edycją treści — jawnie zostawiamy updated_at bez zmian,
   // inaczej $onUpdateFn ze schematu podbiłby znacznik.
-  db.update(notes)
+  await db.update(notes)
     .set({ pinned: not(notes.pinned), updatedAt: sql`${notes.updatedAt}` })
-    .where(eq(notes.id, id.data))
-    .run();
+    .where(eq(notes.id, id.data));
   revalidatePath(PATH);
 }
 
@@ -82,6 +81,6 @@ export async function deleteNote(formData: FormData): Promise<void> {
   const id = idField.safeParse(formData.get('id'));
   if (!id.success) return;
 
-  db.delete(notes).where(eq(notes.id, id.data)).run();
+  await db.delete(notes).where(eq(notes.id, id.data));
   revalidatePath(PATH);
 }

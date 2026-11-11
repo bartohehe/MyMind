@@ -3,10 +3,6 @@ node_modules
 next-env.d.ts
 *.tsbuildinfo
 
-# Baza danych — dane lokalne, nigdy do repo
-data/*
-!data/.gitkeep
-
 .env
 .env.local
 .DS_Store

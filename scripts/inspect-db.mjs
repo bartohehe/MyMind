@@ -1,17 +1,31 @@
 // Szybki podgląd bazy: ile migracji zastosowano i ile wierszy ma każda tabela.
-// Użycie: node scripts/inspect-db.mjs [ścieżka do app.db]
-import Database from 'better-sqlite3';
+// Użycie: npm run db:inspect   (bierze DATABASE_URL z otoczenia albo domyślny lokalny adres)
+import pg from 'pg';
 
-const db = new Database(process.argv[2] ?? 'data/app.db', { readonly: true });
-
-const migrations = db.prepare('SELECT COUNT(*) AS n FROM __drizzle_migrations').get();
-console.log(`Migracje: ${migrations.n}`);
-
-const tables = db
-  .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__drizzle%' ORDER BY name")
-  .all();
-for (const { name } of tables) {
-  const { n } = db.prepare(`SELECT COUNT(*) AS n FROM "${name}"`).get();
-  console.log(`  ${name.padEnd(18)} ${n}`);
+try {
+  process.loadEnvFile();
+} catch {
+  // Brak .env — zostają zmienne środowiska albo domyślny lokalny adres.
 }
-db.close();
+
+const url = process.env.DATABASE_URL || 'postgres://mymind:mymind@localhost:5432/mymind';
+const client = new pg.Client({ connectionString: url });
+await client.connect();
+
+try {
+  const migrations = await client
+    .query('SELECT COUNT(*)::int AS n FROM drizzle.__drizzle_migrations')
+    .then((r) => r.rows[0].n)
+    .catch(() => 0);
+  console.log(`Migracje: ${migrations}`);
+
+  const { rows: tables } = await client.query(
+    "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename",
+  );
+  for (const { tablename } of tables) {
+    const { rows } = await client.query(`SELECT COUNT(*)::int AS n FROM "${tablename}"`);
+    console.log(`  ${tablename.padEnd(18)} ${rows[0].n}`);
+  }
+} finally {
+  await client.end();
+}

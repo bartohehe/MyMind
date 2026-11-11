@@ -1,20 +1,22 @@
 /**
  * Ręczne uruchomienie migracji: `npm run db:migrate`.
- * Normalnie nie jest potrzebne — aplikacja migruje bazę sama przy starcie
- * (patrz src/db/index.ts). Przydaje się do sprawdzenia migracji bez startu Next.js.
+ * Normalnie nie jest potrzebne — serwer migruje bazę sam przy starcie
+ * (src/instrumentation.ts). Przydaje się, żeby sprawdzić migracje bez startu Next.js.
  */
-import fs from 'node:fs';
-import path from 'node:path';
-import Database from 'better-sqlite3';
-import { drizzle } from 'drizzle-orm/better-sqlite3';
-import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
+import { databaseUrl } from './config';
+import { runMigrations } from './run-migrations';
 
-const dbPath = process.env.DATABASE_PATH ?? path.join(process.cwd(), 'data', 'app.db');
-fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+try {
+  process.loadEnvFile();
+} catch {
+  // Brak .env — zostają zmienne środowiska albo domyślny lokalny adres.
+}
 
-const sqlite = new Database(dbPath);
-sqlite.pragma('journal_mode = WAL');
-migrate(drizzle(sqlite), { migrationsFolder: path.join(process.cwd(), 'drizzle') });
-sqlite.close();
+const target = databaseUrl().replace(/:\/\/([^:@/]+):[^@/]*@/, '://$1:***@');
 
-console.log(`Migracje zastosowane: ${dbPath}`);
+runMigrations({ attempts: 3 })
+  .then(() => console.log(`Migracje zastosowane: ${target}`))
+  .catch((error: unknown) => {
+    console.error(`Migracja nie powiodła się (${target}):`, error);
+    process.exitCode = 1;
+  });

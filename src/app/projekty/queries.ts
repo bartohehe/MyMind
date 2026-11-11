@@ -14,8 +14,8 @@ const STATUS_ORDER: Record<ProjectStatus, number> = { 'w toku': 0, pomysł: 1, z
  * w grupie — najbliższy termin, potem ostatnio edytowane.
  */
 export async function getProjects(): Promise<ProjectWithTasks[]> {
-  const rows = db.select().from(projects).all();
-  const tasks = db.select().from(projectTasks).orderBy(asc(projectTasks.id)).all();
+  const rows = await db.select().from(projects);
+  const tasks = await db.select().from(projectTasks).orderBy(asc(projectTasks.id));
 
   const byProject = new Map<number, ProjectTask[]>();
   for (const task of tasks) {

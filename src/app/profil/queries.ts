@@ -9,13 +9,13 @@ import { profile, type Profile } from '@/db/schema';
 export const PROFILE_ID = 1;
 
 export async function getProfile(): Promise<Profile> {
-  const row = db.select().from(profile).where(eq(profile.id, PROFILE_ID)).get();
+  const [row] = await db.select().from(profile).where(eq(profile.id, PROFILE_ID)).limit(1);
 
   return (
     row ?? {
       id: PROFILE_ID,
       fullName: '',
-      birthDate: '',
+      birthDate: null,
       weightKg: null,
       heightCm: null,
       bloodType: '',

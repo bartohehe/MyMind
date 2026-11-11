@@ -1,0 +1,3 @@
+# Repo zawsze trzyma LF, a checkout na Windowsie też dostaje LF —
+# Dockerfile i skrypty uruchamiane w kontenerze (Linux, Pi) nie lubią CRLF.
+* text=auto eol=lf

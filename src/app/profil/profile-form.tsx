@@ -43,7 +43,7 @@ export function ProfileForm({ profile }: { profile: Profile }) {
               name="birthDate"
               type="date"
               className="txt"
-              defaultValue={v?.['birthDate'] ?? profile.birthDate}
+              defaultValue={v?.['birthDate'] ?? profile.birthDate ?? ''}
               aria-invalid={e?.['birthDate'] ? true : undefined}
             />
           </Field>

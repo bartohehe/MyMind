@@ -40,7 +40,7 @@ export async function createEvent(
   if (!parsed.success) return parsed.state;
 
   try {
-    db.insert(events).values(parsed.data).run();
+    await db.insert(events).values(parsed.data);
   } catch (error) {
     console.error('createEvent', error);
     return fail(t.errors.saveFailed, undefined, formValues(formData));
@@ -54,6 +54,6 @@ export async function deleteEvent(formData: FormData): Promise<void> {
   const id = idField.safeParse(formData.get('id'));
   if (!id.success) return;
 
-  db.delete(events).where(eq(events.id, id.data)).run();
+  await db.delete(events).where(eq(events.id, id.data));
   revalidate();
 }

@@ -4,7 +4,7 @@ import { ageFrom, formatNumber } from '@/lib/date';
 
 /** Gotowe do wyświetlenia wartości profilu — wspólne dla Profilu i Pulpitu. */
 export function profileSummary(profile: Profile, t: Dict, locale: Locale) {
-  const age = ageFrom(profile.birthDate);
+  const age = ageFrom(profile.birthDate ?? '');
   return {
     name: profile.fullName,
     initials: profile.fullName

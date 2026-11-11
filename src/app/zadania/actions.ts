@@ -38,7 +38,7 @@ export async function createTodo(
   if (!parsed.success) return parsed.state;
 
   try {
-    db.insert(todos).values(parsed.data).run();
+    await db.insert(todos).values(parsed.data);
   } catch (error) {
     console.error('createTodo', error);
     return fail(t.errors.saveFailed, undefined, formValues(formData));
@@ -52,7 +52,7 @@ export async function toggleTodo(formData: FormData): Promise<void> {
   const id = idField.safeParse(formData.get('id'));
   if (!id.success) return;
 
-  db.update(todos).set({ done: not(todos.done) }).where(eq(todos.id, id.data)).run();
+  await db.update(todos).set({ done: not(todos.done) }).where(eq(todos.id, id.data));
   revalidate();
 }
 
@@ -63,13 +63,12 @@ export async function cycleTodoPriority(formData: FormData): Promise<void> {
   const id = idField.safeParse(formData.get('id'));
   if (!id.success) return;
 
-  const todo = db.select().from(todos).where(eq(todos.id, id.data)).get();
+  const [todo] = await db.select().from(todos).where(eq(todos.id, id.data)).limit(1);
   if (!todo) return;
 
-  db.update(todos)
+  await db.update(todos)
     .set({ priority: NEXT_PRIORITY[todo.priority] })
-    .where(eq(todos.id, id.data))
-    .run();
+    .where(eq(todos.id, id.data));
   revalidate();
 }
 
@@ -77,6 +76,6 @@ export async function deleteTodo(formData: FormData): Promise<void> {
   const id = idField.safeParse(formData.get('id'));
   if (!id.success) return;
 
-  db.delete(todos).where(eq(todos.id, id.data)).run();
+  await db.delete(todos).where(eq(todos.id, id.data));
   revalidate();
 }

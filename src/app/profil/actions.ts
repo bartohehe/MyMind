@@ -11,6 +11,7 @@ import {
   formValues,
   linesToArray,
   ok,
+  optionalIsoDate,
   optionalNumber,
   optionalText,
   parseForm,
@@ -21,10 +22,7 @@ import { PROFILE_ID } from './queries';
 
 const profileSchema = z.object({
   fullName: optionalText(120),
-  birthDate: z
-    .string()
-    .trim()
-    .refine((value) => value === '' || /^\d{4}-\d{2}-\d{2}$/.test(value), 'invalidDate'),
+  birthDate: optionalIsoDate,
   weightKg: optionalNumber({ min: 1, max: 500 }),
   heightCm: optionalNumber({ min: 30, max: 260, integer: true }),
   bloodType: optionalText(16),
@@ -53,10 +51,9 @@ export async function saveProfile(
   };
 
   try {
-    db.insert(profile)
+    await db.insert(profile)
       .values({ id: PROFILE_ID, ...values })
-      .onConflictDoUpdate({ target: profile.id, set: values })
-      .run();
+      .onConflictDoUpdate({ target: profile.id, set: values });
   } catch (error) {
     console.error('saveProfile', error);
     return fail(t.errors.saveFailed, undefined, formValues(formData));

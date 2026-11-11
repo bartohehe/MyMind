@@ -46,10 +46,9 @@ export async function saveActivityDay(
   };
 
   try {
-    db.insert(activityDays)
+    await db.insert(activityDays)
       .values({ date, ...values })
-      .onConflictDoUpdate({ target: activityDays.date, set: values })
-      .run();
+      .onConflictDoUpdate({ target: activityDays.date, set: values });
   } catch (error) {
     console.error('saveActivityDay', error);
     return fail(t.errors.saveFailed, undefined, formValues(formData));
@@ -77,7 +76,7 @@ export async function createWorkout(
   if (!parsed.success) return parsed.state;
 
   try {
-    db.insert(workouts).values(parsed.data).run();
+    await db.insert(workouts).values(parsed.data);
   } catch (error) {
     console.error('createWorkout', error);
     return fail(t.errors.saveFailed, undefined, formValues(formData));
@@ -91,6 +90,6 @@ export async function deleteWorkout(formData: FormData): Promise<void> {
   const id = idField.safeParse(formData.get('id'));
   if (!id.success) return;
 
-  db.delete(workouts).where(eq(workouts.id, id.data)).run();
+  await db.delete(workouts).where(eq(workouts.id, id.data));
   revalidatePath(PATH);
 }

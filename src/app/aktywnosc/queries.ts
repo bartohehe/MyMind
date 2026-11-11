@@ -20,7 +20,8 @@ export const WORKOUT_LOOK: Record<WorkoutType, { emoji: string; color: string; t
 };
 
 export async function getActivityDay(date: string): Promise<ActivityDay | undefined> {
-  return db.select().from(activityDays).where(eq(activityDays.date, date)).get();
+  const [row] = await db.select().from(activityDays).where(eq(activityDays.date, date)).limit(1);
+  return row;
 }
 
 export type WeekStepsDay = { date: string; steps: number | null; isToday: boolean };
@@ -29,11 +30,10 @@ export type WeekStepsDay = { date: string; steps: number | null; isToday: boolea
 export async function getWeekSteps(): Promise<WeekStepsDay[]> {
   const todayStr = today();
   const monday = startOfWeek(todayStr);
-  const rows = db
+  const rows = await db
     .select()
     .from(activityDays)
-    .where(and(gte(activityDays.date, monday), lte(activityDays.date, addDays(monday, 6))))
-    .all();
+    .where(and(gte(activityDays.date, monday), lte(activityDays.date, addDays(monday, 6))));
   const byDate = new Map(rows.map((row) => [row.date, row.steps]));
 
   return Array.from({ length: 7 }, (_, index) => {
@@ -47,6 +47,5 @@ export async function getRecentWorkouts(limit = 8): Promise<Workout[]> {
     .select()
     .from(workouts)
     .orderBy(desc(workouts.date), desc(workouts.time), desc(workouts.id))
-    .limit(limit)
-    .all();
+    .limit(limit);
 }

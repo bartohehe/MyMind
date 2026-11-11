@@ -10,6 +10,5 @@ export async function getNotes(): Promise<Note[]> {
   return db
     .select()
     .from(notes)
-    .orderBy(desc(notes.pinned), desc(notes.updatedAt), desc(notes.id))
-    .all();
+    .orderBy(desc(notes.pinned), desc(notes.updatedAt), desc(notes.id));
 }

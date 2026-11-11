@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { and, eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { db } from '@/db';
@@ -65,9 +65,8 @@ export async function createMedication(
 
   try {
     // Nowy lek zawsze startuje jako aktywny.
-    db.insert(medications)
-      .values({ name, dose: doseAmount ? `${doseAmount} ${doseUnit}` : '', schedule, times })
-      .run();
+    await db.insert(medications)
+      .values({ name, dose: doseAmount ? `${doseAmount} ${doseUnit}` : '', schedule, times });
   } catch (error) {
     console.error('createMedication', error);
     return fail(t.errors.saveFailed, undefined, formValues(formData));
@@ -93,7 +92,7 @@ export async function updateMedication(
   const { id, ...values } = parsed.data;
 
   try {
-    db.update(medications).set({ ...values, times }).where(eq(medications.id, id)).run();
+    await db.update(medications).set({ ...values, times }).where(eq(medications.id, id));
   } catch (error) {
     console.error('updateMedication', error);
     return fail(t.errors.saveFailed, undefined, formValues(formData));
@@ -108,10 +107,9 @@ export async function setMedicationActive(formData: FormData): Promise<void> {
   const id = idField.safeParse(formData.get('id'));
   if (!id.success) return;
 
-  db.update(medications)
+  await db.update(medications)
     .set({ active: formData.get('active') === '1' })
-    .where(eq(medications.id, id.data))
-    .run();
+    .where(eq(medications.id, id.data));
   revalidate();
 }
 
@@ -119,45 +117,33 @@ export async function deleteMedication(formData: FormData): Promise<void> {
   const id = idField.safeParse(formData.get('id'));
   if (!id.success) return;
 
-  db.delete(medications).where(eq(medications.id, id.data)).run();
+  await db.delete(medications).where(eq(medications.id, id.data));
   revalidate();
 }
 
 const toggleSchema = z.object({ id: idField, slot: z.enum(MED_SLOTS) });
 
 /**
- * Przełącza „wzięte dzisiaj" dla jednej pory. Upsertuje wiersz dla
- * (lek, dzisiejsza data, pora) — unikalny indeks gwarantuje jeden wpis.
+ * Przełącza „wzięte dzisiaj" dla jednej pory — jednym atomowym upsertem na
+ * (lek, dzisiejsza data, pora). Nowy wiersz = wzięte; istniejący odwracamy
+ * po stronie bazy, więc szybki podwójny klik nie rozjedzie stanu.
  */
 export async function toggleTaken(formData: FormData): Promise<void> {
   const parsed = toggleSchema.safeParse(Object.fromEntries(formData));
   if (!parsed.success) return;
 
   const { id, slot } = parsed.data;
-  const date = today();
 
-  const existing = db
-    .select()
-    .from(medicationLogs)
-    .where(
-      and(
-        eq(medicationLogs.medicationId, id),
-        eq(medicationLogs.date, date),
-        eq(medicationLogs.slot, slot),
-      ),
-    )
-    .get();
-
-  const taken = !(existing?.taken ?? false);
-  const takenAt = taken ? new Date() : null;
-
-  db.insert(medicationLogs)
-    .values({ medicationId: id, date, slot, taken, takenAt })
+  await db
+    .insert(medicationLogs)
+    .values({ medicationId: id, date: today(), slot, taken: true, takenAt: new Date() })
     .onConflictDoUpdate({
       target: [medicationLogs.medicationId, medicationLogs.date, medicationLogs.slot],
-      set: { taken, takenAt },
-    })
-    .run();
+      set: {
+        taken: sql`NOT ${medicationLogs.taken}`,
+        takenAt: sql`CASE WHEN ${medicationLogs.taken} THEN NULL ELSE now() END`,
+      },
+    });
 
   revalidate();
 }
