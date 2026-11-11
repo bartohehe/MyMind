@@ -1,0 +1,18 @@
+services:
+  mymind:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mymind:latest
+    container_name: mymind
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    volumes:
+      # Baza SQLite żyje na hoście — przetrwa przebudowę obrazu.
+      - ./data:/app/data
+    environment:
+      # Strefa czasowa decyduje, kiedy „dzisiaj" przeskakuje na nowy dzień
+      # (od tego zależy automatyczny reset checkboxów w zakładce Leki).
+      TZ: Europe/Warsaw
+      DATABASE_PATH: /app/data/app.db
